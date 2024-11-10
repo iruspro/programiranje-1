@@ -20,9 +20,12 @@ module type NAT = sig
 
   val eq  : t -> t -> bool
   val zero : t
-  (* Dodajte manjkajoče! *)
-  (* val to_int : t -> int *)
-  (* val of_int : int -> t *)
+  val one : t
+  val sum : t -> t -> t
+  val sub : t -> t -> t option
+  val mul : t -> t -> t
+  val to_int : t -> int
+  val of_int : int -> t
 end
 
 (*----------------------------------------------------------------------------*
@@ -38,8 +41,12 @@ module Nat_int : NAT = struct
   type t = int
   let eq x y = failwith "later"
   let zero = 0
-  (* Dodajte manjkajoče! *)
-
+  let one = 1
+  let sum x y = x + y
+  let sub x y = failwith "later"
+  let mul x y = x * y
+  let to_int (x : t) = x
+  let of_int (x : int) = if x >= 0 then x else (-x)
 end
 
 (*----------------------------------------------------------------------------*
@@ -52,12 +59,38 @@ end
 [*----------------------------------------------------------------------------*)
 
 module Nat_peano : NAT = struct
-
-  type t = unit (* To morate spremeniti! *)
-  let eq x y = failwith "later"
-  let zero = () (* To morate spremeniti! *)
-  (* Dodajte manjkajoče! *)
-
+  type t = 
+  | Zero
+  | Succesor of t
+  let rec eq x y = 
+    match x, y with
+    | Zero, Zero -> true
+    | Zero, _ | _, Zero -> false
+    | Succesor x, Succesor y -> eq x y
+  let zero = Zero
+  let one = Succesor Zero
+  let rec sum x y = 
+    match y with
+    | Zero -> x
+    | Succesor y -> Succesor (sum x y)
+  let sub x y = failwith "later"
+  let rec mul x y = 
+    match y with
+    | Zero -> Zero
+    | Succesor y -> sum x (mul x y)
+  let to_int x = 
+    let rec aux acc = function
+      | Zero -> acc
+      | Succesor x -> aux (succ acc) x
+    in
+    aux 0 x
+  let of_int x = 
+    let x = if x >= 0 then x else (-x) in
+    let rec aux acc = function
+      | 0 -> acc
+      | x -> aux (Succesor acc) (pred x)
+    in
+    aux Zero x
 end
 
 (*----------------------------------------------------------------------------*
@@ -79,8 +112,12 @@ end
 let sum_nat_100 = 
   (* let module Nat = Nat_int in *)
   let module Nat = Nat_peano in
-  Nat.zero (* to popravite na ustrezen izračun *)
-  (* |> Nat.to_int *)
+  let rec aux acc = function
+    | 0 -> acc
+    | x -> aux (Nat.sum (Nat.of_int x) acc) (pred x)
+  in
+  aux Nat.zero 100
+  |> Nat.to_int
 (* val sum_nat_100 : int = 5050 *)
 
 (*----------------------------------------------------------------------------*
@@ -135,7 +172,13 @@ let sum_nat_100 =
 module type COMPLEX = sig
   type t
   val eq : t -> t -> bool
-  (* Dodajte manjkajoče! *)
+  val zero : t
+  val one : t
+  val i : t
+  val negation : t -> t
+  val conjugate : t -> t
+  val sum : t -> t -> t
+  val mul : t -> t -> t
 end
 
 (*----------------------------------------------------------------------------*
@@ -147,9 +190,14 @@ module Cartesian : COMPLEX = struct
 
   type t = {re : float; im : float}
 
-  let eq x y = failwith "later"
-  (* Dodajte manjkajoče! *)
-
+  let eq z w = z.re = w.re && z.im = w.im
+  let zero = {re = 0.; im = 0.}
+  let one = {re = 1.; im = 0.}
+  let i = {re = 0.; im = 1.}
+  let negation {re; im} = {re = -.re; im = -.im}
+  let conjugate z = {z with im = -.z.im}
+  let sum z w = {re = z.re +. w.re; im = z.im +. w.im}
+  let mul z w = {re = z.re *. w.re -. z.im *. w.im; im = z.re *. w.im +. z.im *. w.re}
 end
 
 (*----------------------------------------------------------------------------*
@@ -168,7 +216,25 @@ module Polar : COMPLEX = struct
   let rad_of_deg deg = (deg /. 180.) *. pi
   let deg_of_rad rad = (rad /. pi) *. 180.
 
-  let eq x y = failwith "later"
-  (* Dodajte manjkajoče! *)
-
+  let eq x y = 
+    let rec aux arg = 
+      if arg >= 0. then
+        if arg < (2. *. pi) then arg else aux (arg -. (2. *. pi))
+      else
+        if arg > 0. then arg else aux (arg +. (2. *. pi))
+      in
+    let x = {x with arg = aux x.arg} in
+    let y = {y with arg = aux y.arg} in   
+    match x, y with
+    | x, y when x.magn = 0. && y.magn = 0. -> true
+    | x, y when x.magn <> 0. && y.magn = 0. -> false
+    | x, y when x.magn = 0. && y.magn <> 0. -> false
+    | x, y -> x.magn = y.magn && x.arg = y.magn
+  let zero = {magn = 0.; arg = 0.}
+  let one = {magn = 1.; arg = 0.}
+  let i = {magn = 1.; arg = pi /. 2.}
+  let negation z = {z with arg = z.arg +. pi}
+  let conjugate z = {z with arg = -.z.arg}
+  let sum z w = failwith "TODO"
+  let mul z w = {magn = z.magn *. w.magn; arg = z.arg +. w.arg}
 end

@@ -18,11 +18,16 @@
 module type NAT = sig
   type t
 
-  val eq  : t -> t -> bool
+  val eq : t -> t -> bool
   val zero : t
+
   (* Dodajte manjkajoče! *)
-  (* val to_int : t -> int *)
-  (* val of_int : int -> t *)
+  val one : t
+  val ( + ) : t -> t -> t
+  val ( - ) : t -> t -> t
+  val ( * ) : t -> t -> t
+  val to_int : t -> int
+  val of_int : int -> t
 end
 
 (*----------------------------------------------------------------------------*
@@ -34,12 +39,22 @@ end
 [*----------------------------------------------------------------------------*)
 
 module Nat_int : NAT = struct
-
   type t = int
-  let eq x y = failwith "later"
-  let zero = 0
-  (* Dodajte manjkajoče! *)
 
+  let eq x y = x = y
+  let zero = 0
+
+  (* Dodajte manjkajoče! *)
+  let one = 1
+  let ( + ) v1 v2 = v1 + v2
+
+  let ( - ) v1 v2 =
+    let diff = v1 - v2 in
+    if diff >= zero then diff else zero
+
+  let ( * ) v1 v2 = v1 * v2
+  let to_int v = v
+  let of_int v = if v >= 0 then v else zero
 end
 
 (*----------------------------------------------------------------------------*
@@ -52,13 +67,54 @@ end
 [*----------------------------------------------------------------------------*)
 
 module Nat_peano : NAT = struct
+  type t = Zero | Succ of t
 
-  type t = unit (* To morate spremeniti! *)
-  let eq x y = failwith "later"
-  let zero = () (* To morate spremeniti! *)
+  let zero = Zero
+  let one = Succ Zero
+
+  let eq x y =
+    let rec aux x y =
+      match (x, y) with
+      | Zero, Zero -> true
+      | Zero, _ | _, Zero -> false
+      | Succ n, Succ m -> aux n m
+    in
+    aux x y
+
   (* Dodajte manjkajoče! *)
+  let ( + ) n m =
+    let rec aux acc = function Zero -> acc | Succ n -> aux (Succ acc) n in
+    aux n m
 
+  let ( - ) n m =
+    let rec aux n m =
+      match (n, m) with
+      | Zero, _ -> zero
+      | _, Zero -> n
+      | Succ n, Succ m -> aux n m
+    in
+    aux n m
+
+  let ( * ) n m =
+    let rec aux acc = function Zero -> acc | Succ m -> aux (acc + n) m in
+    aux zero m
+
+  let to_int n =
+    let rec aux acc = function Zero -> acc | Succ n -> aux (succ acc) n in
+    aux 0 n
+
+  let of_int n =
+    let rec aux acc = function
+      | n when n <= 0 -> acc
+      | n -> aux (acc + one) (pred n)
+    in
+    aux zero n
 end
+
+let primer_nat =
+  let open Nat_peano in
+  let piano_nat = of_int 1 * of_int 10 in
+  to_int piano_nat
 
 (*----------------------------------------------------------------------------*
  Ocaml omogoča sestavljanje modulov iz drugih modulov z uporabo [funktorjev]
@@ -81,12 +137,18 @@ module type CALC = sig
   val sum_100 : t
 end
 
-module Nat_calculations (N: NAT) : CALC with type t := N.t = struct
-  let factorial _ = (* To morate spremeniti! *)
-    N.zero
+module Nat_calculations (N : NAT) : CALC with type t := N.t = struct
+  let rec factorial n =
+    let open N in
+    if eq n zero then one else n * factorial (n - one)
 
-  let sum_100 = (* To morate spremeniti! *)
-    N.zero
+  let sum_100 =
+    let open N in
+    let rec aux acc = function
+      | n when eq n zero -> acc
+      | n -> aux (acc + n) (n - one)
+    in
+    aux zero (of_int 100)
 end
 
 (*----------------------------------------------------------------------------*
@@ -100,6 +162,12 @@ end
 module Nat_int_calc = Nat_calculations (Nat_int)
 module Nat_peano_calc = Nat_calculations (Nat_peano)
 
+let sum_100_int = Nat_int_calc.sum_100 |> Nat_int.to_int
+let sum_100_peano = Nat_peano_calc.sum_100 |> Nat_peano.to_int
+let fact_5_int = Nat_int.of_int 5 |> Nat_int_calc.factorial |> Nat_int.to_int
+
+let fact_5_peano =
+  Nat_peano.of_int 5 |> Nat_peano_calc.factorial |> Nat_peano.to_int
 
 (* val sum_100_int : int = 5050 *)
 (* val sum_100_peano : int = 5050 *)
@@ -116,16 +184,28 @@ module Nat_peano_calc = Nat_calculations (Nat_peano)
  Pretvorjanje iz in v `int` pa definirajte poljubno.
 [*----------------------------------------------------------------------------*)
 
-module Nat_pair (A: NAT) (B: NAT) : NAT = struct
+module Nat_pair (A : NAT) (B : NAT) : NAT = struct
   type t = A.t * B.t
 
   let eq x y = failwith "later"
   let zero = (A.zero, B.zero)
-  (* Dodajte manjkajoče! *)
+  let one = (A.one, B.one)
+  let ( + ) (x1, y1) (x2, y2) = (A.( + ) x1 x2, B.( + ) y1 y2)
+  let ( - ) (x1, y1) (x2, y2) = (A.( - ) x1 x2, B.( - ) y1 y2)
+  let ( * ) (x1, y1) (x2, y2) = (A.( * ) x1 x2, B.( * ) y1 y2)
+  let to_int (x, y) = Int.add (A.to_int x) (B.to_int y)
+
+  let of_int n =
+    let half = n / 2 in
+    (A.of_int half, B.of_int (Int.sub n half))
 end
 
 module Nat_pair_int_peano = Nat_pair (Nat_int) (Nat_peano)
+
 (* Poskusite narediti nekaj testnih računov. *)
+let pair_primer_1 =
+  let open Nat_pair_int_peano in
+  of_int 11 + of_int 12 |> to_int
 
 (*----------------------------------------------------------------------------*
  ## Kompleksna števila
@@ -178,8 +258,15 @@ module Nat_pair_int_peano = Nat_pair (Nat_int) (Nat_peano)
 
 module type COMPLEX = sig
   type t
+
   val eq : t -> t -> bool
-  (* Dodajte manjkajoče! *)
+  val zero : t
+  val one : t
+  val i : t
+  val negate : t -> t
+  val conjugate : t -> t
+  val ( + ) : t -> t -> t
+  val ( * ) : t -> t -> t
 end
 
 (*----------------------------------------------------------------------------*
@@ -188,12 +275,21 @@ end
 [*----------------------------------------------------------------------------*)
 
 module Cartesian : COMPLEX = struct
+  type t = { re : float; im : float }
 
-  type t = {re : float; im : float}
+  let eq x y = x = y
+  let zero = { re = 0.; im = 0. }
+  let one = { re = 1.; im = 0. }
+  let i = { re = 0.; im = 1. }
+  let negate z = { re = -.z.re; im = -.z.im }
+  let conjugate z = { z with im = -.z.im }
+  let ( + ) z w = { re = z.re +. w.re; im = z.im +. w.im }
 
-  let eq x y = failwith "later"
-  (* Dodajte manjkajoče! *)
-
+  let ( * ) z w =
+    {
+      re = (z.re *. w.re) -. (z.im *. w.im);
+      im = (z.re *. w.im) +. (z.im *. w.re);
+    }
 end
 
 (*----------------------------------------------------------------------------*
@@ -204,15 +300,21 @@ end
 [*----------------------------------------------------------------------------*)
 
 module Polar : COMPLEX = struct
-
-  type t = {magn : float; arg : float}
+  type t = { magn : float; arg : float }
 
   (* Pomožne funkcije za lažje življenje. *)
   let pi = 2. *. acos 0.
-  let rad_of_deg deg = (deg /. 180.) *. pi
-  let deg_of_rad rad = (rad /. pi) *. 180.
+  let rad_of_deg deg = deg /. 180. *. pi
+  let deg_of_rad rad = rad /. pi *. 180.
+  let normalize_arg arg = if arg >= 2. *. pi then arg -. (2. *. pi) else arg
+  let zero = { magn = 0.; arg = 0. }
+  let one = { magn = 1.; arg = 0. }
+  let i = { magn = 1.; arg = pi /. 2. }
+  let eq x y = x = y
+  let negate z = { z with arg = normalize_arg (z.arg +. pi) }
+  let conjugate z = { z with arg = (2. *. pi) -. z.arg }
+  let ( + ) z _ = z
 
-  let eq x y = failwith "later"
-  (* Dodajte manjkajoče! *)
-
+  let ( * ) z w =
+    { magn = z.magn *. w.magn; arg = normalize_arg (z.arg +. w.arg) }
 end
